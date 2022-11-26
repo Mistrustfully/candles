@@ -7,6 +7,8 @@ edition = "2021"
 
 [dependencies] #                                 v remove before building standalone binary (or if on windows)
 bevy = { version = "0.9", features = ["wayland", "dynamic"] }
+bevy_rapier2d = "0.19.0"
+bevy_ecs_ldtk = { version = "0.5", features = ["atlas"] }
 
 [profile.dev]
 opt-level = 1
