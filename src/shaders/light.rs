@@ -1,4 +1,5 @@
 use bevy::{
+	math::{Vec3Swizzles, Vec4Swizzles},
 	prelude::*,
 	reflect::TypeUuid,
 	render::{
@@ -8,15 +9,10 @@ use bevy::{
 	sprite::{Material2d, Material2dPlugin, MaterialMesh2dBundle},
 };
 
-use crate::{MainRenderTarget, ShouldResize};
+use crate::{player::PlayerCamera, MainRenderTarget, ShouldResize};
 
-#[derive(Resource, Clone, ShaderType, Copy)]
-pub struct LightingConfig {
-	pub radius: f32,
-	pub time: f32,
-	_pad: f32, // Welcome to the world of WASM where if you don't pad things to 16 bytes it shits
-	_pad2: f32, // itself.
-}
+#[derive(Resource, Debug)]
+pub struct Lights(pub [Vec4; 16]);
 
 #[derive(AsBindGroup, TypeUuid, Clone)]
 #[uuid = "bc2f08eb-a0fb-43f1-a908-54871ea597d5"]
@@ -26,7 +22,7 @@ pub struct LightingMaterial {
 	#[sampler(1)]
 	pub source_image: Handle<Image>,
 	#[uniform(2)]
-	pub lighting_config: LightingConfig,
+	pub lights: [Vec4; 16],
 }
 
 impl Material2d for LightingMaterial {
@@ -59,12 +55,7 @@ pub fn init_lighting_shader(
 	// This material has the texture that has been rendered.
 	let material_handle = post_processing_materials.add(LightingMaterial {
 		source_image: render_target.0.clone_weak(),
-		lighting_config: LightingConfig {
-			radius: 1.0,
-			time: 0.0,
-			_pad: 0.0,
-			_pad2: 0.0,
-		},
+		lights: [Vec4::ZERO; 16],
 	});
 
 	// Post processing 2d quad, with material using the render texture done by the main camera, with a custom shader.
@@ -98,31 +89,39 @@ pub fn init_lighting_shader(
 
 pub fn update_lighting_shader(
 	mut lighting_material: ResMut<Assets<LightingMaterial>>,
-	lighting_config: Res<LightingConfig>,
+	lights: Res<Lights>,
+	camera_query: Query<(&Camera, &GlobalTransform), With<PlayerCamera>>,
 	time: Res<Time>,
 ) {
+	let (camera, transform) = camera_query.get_single().unwrap();
 	for mut lighting in lighting_material.iter_mut() {
-		lighting.1.lighting_config.radius = lighting_config.radius;
-		lighting.1.lighting_config.time = time.raw_elapsed_seconds();
-	}
-}
+		for (i, v) in lights.0.iter().enumerate() {
+			let vec_position =
+				camera.world_to_ndc(transform, v.xyz()).unwrap() * Vec3::new(1.0, -1.0, 1.0);
 
-fn update_lighting_config(mut lighting_config: ResMut<LightingConfig>, time: Res<Time>) {
-	lighting_config.radius = 0.5;
+			lighting.1.lights[i] = Vec4::new(
+				vec_position.x,
+				vec_position.y,
+				time.raw_elapsed_seconds(),
+				v.w,
+			);
+		}
+	}
 }
 
 pub struct LightShaderPlugin;
 impl Plugin for LightShaderPlugin {
 	fn build(&self, app: &mut App) {
+		let mut lights = [Vec4::ZERO; 16];
+		for i in 0..15 {
+			lights[i].w = (i as f32) / 16.0;
+			lights[i].x = (i as f32) * 64.0;
+			lights[i].y = 128.0
+		}
+
 		app.add_plugin(Material2dPlugin::<LightingMaterial>::default())
 			.add_startup_system_to_stage(StartupStage::PostStartup, init_lighting_shader)
 			.add_system(update_lighting_shader)
-			.add_system(update_lighting_config)
-			.insert_resource(LightingConfig {
-				radius: 1.0,
-				time: 0.0,
-				_pad: 0.0,
-				_pad2: 0.0,
-			});
+			.insert_resource(Lights(lights));
 	}
 }

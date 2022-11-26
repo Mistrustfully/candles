@@ -124,7 +124,6 @@ fn main() {
 						width: H_WIN_SIZE,
 						height: V_WIN_SIZE,
 						resizable: false,
-						fit_canvas_to_parent: true,
 						..default()
 					},
 					..default()

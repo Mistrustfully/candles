@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
+use crate::shaders::light::Lights;
+
 #[derive(Component)]
 pub struct PlayerCamera;
 
@@ -50,6 +52,16 @@ fn camera_follows_player(
 	);
 }
 
+fn light_follows_player(player_query: Query<&Transform, With<Player>>, mut lights: ResMut<Lights>) {
+	let player_transform = player_query.get_single().expect("No player?").translation;
+	lights.0[0] = Vec4::new(
+		player_transform.x,
+		player_transform.y,
+		player_transform.z,
+		0.5,
+	);
+}
+
 fn player_movement(
 	keyboard_input: Res<Input<KeyCode>>,
 	mut velocity_query: Query<&mut Velocity, With<Player>>,
@@ -79,6 +91,7 @@ impl Plugin for PlayerPlugin {
 	fn build(&self, app: &mut App) {
 		app.add_startup_system(spawn_player)
 			.add_system(player_movement)
+			.add_system(light_follows_player)
 			.add_system_to_stage(CoreStage::PostUpdate, camera_follows_player);
 		// We add the
 		// camera_follows_player system to PhysicStages::Writeback so the physic calculations are
